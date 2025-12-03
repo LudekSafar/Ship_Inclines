@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lodní Logger - Externí</title>
+    <style>
+      body { font-family: sans-serif; background: #111; color: #eee; text-align: center; padding: 20px; }
+      .box { border: 1px solid #444; padding: 15px; margin-bottom: 15px; border-radius: 10px; background: #222; }
+      .val { font-size: 2em; color: #0f0; font-weight: bold; }
+      button { width: 100%; padding: 20px; font-size: 1.2em; background: #444; color: white; border: none; border-radius: 5px; margin-bottom: 10px; }
+      #btnStart { background: #28a745; display: none; }
+      #btnStop { background: #dc3545; display: none; }
+      .status { font-size: 0.8em; color: #aaa; }
+    </style>
+  </head>
+  <body>
+
+    <h2>Lodní Logger (Netlify)</h2>
+
+    <div class="box">
+      <div>G-Force: <span id="gVal" class="val">0.00</span></div>
+      <div style="margin-top:10px">
+        X: <span id="betaVal">0</span>° | Y: <span id="gammaVal">0</span>°
+      </div>
+    </div>
+
+    <div class="box">
+      <div>Záznamů v paměti: <span id="bufSize" style="color:orange">0</span></div>
+      <div id="status" class="status">Čekám na start...</div>
+    </div>
+
+    <button id="btnPerm" onclick="askPerm()">1. Povolit iOS Senzory</button>
+    <button id="btnStart" onclick="start()">2. START MĚŘENÍ</button>
+    <button id="btnStop" onclick="stop()">STOP A ODESLAT</button>
+
+    <script>
+      // !!! ZDE VLOŽTE URL Z GOOGLE SCRIPTU !!!
+      const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYxb3CcbPawXuq1Q6UgIGDeCio3a2cw2TO7oiVZZGi_00sMvUekb1daRwkrEKKro7K/exec"; 
+
+      let logging = false;
+      let buffer = [];
+      let uploadTimer = null;
+      
+      // Senzory
+      let acc = {x:0, y:0, z:0, g:0};
+      let ori = {beta:0, gamma:0};
+
+      function askPerm() {
+        // Detekce iOS 13+
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+          DeviceMotionEvent.requestPermission()
+            .then(response => {
+              if (response === 'granted') {
+                runSensors();
+                document.getElementById('btnPerm').style.display = 'none';
+                document.getElementById('btnStart').style.display = 'block';
+              } else {
+                alert("Povolení zamítnuto!");
+              }
+            })
+            .catch(console.error);
+        } else {
+          // Android nebo starý iOS
+          runSensors();
+          document.getElementById('btnPerm').style.display = 'none';
+          document.getElementById('btnStart').style.display = 'block';
+        }
+      }
+
+      function runSensors() {
+        window.addEventListener('devicemotion', e => {
+           acc.x = e.accelerationIncludingGravity.x || 0;
+           acc.y = e.accelerationIncludingGravity.y || 0;
+           acc.z = e.accelerationIncludingGravity.z || 0;
+           acc.g = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2) / 9.81;
+           document.getElementById('gVal').innerText = acc.g.toFixed(2);
+           if(logging) record();
+        });
+        window.addEventListener('deviceorientation', e => {
+           ori.beta = e.beta || 0;
+           ori.gamma = e.gamma || 0;
+           document.getElementById('betaVal').innerText = ori.beta.toFixed(0);
+           document.getElementById('gammaVal').innerText = ori.gamma.toFixed(0);
+        });
+      }
+
+      let lastRec = 0;
+      function record() {
+        const now = Date.now();
+        if (now - lastRec < 100) return; // 10Hz
+        lastRec = now;
+        
+        const t = new Date();
+        const time = t.toLocaleTimeString('cs-CZ') + "." + t.getMilliseconds();
+        const line = `${time};${acc.x.toFixed(3)};${acc.y.toFixed(3)};${acc.z.toFixed(3)};${acc.g.toFixed(3)};${ori.beta.toFixed(1)};${ori.gamma.toFixed(1)}\n`;
+        buffer.push(line);
+        document.getElementById('bufSize').innerText = buffer.length;
+      }
+
+      function start() {
+        buffer = [];
+        logging = true;
+        document.getElementById('btnStart').style.display = 'none';
+        document.getElementById('btnStop').style.display = 'block';
+        document.getElementById('status').innerText = "Měřím a odesílám každých 60s...";
+        
+        // Wake Lock
+        if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(console.log);
+        
+        uploadTimer = setInterval(sendData, 60000);
+      }
+
+      function stop() {
+        logging = false;
+        clearInterval(uploadTimer);
+        sendData();
+        document.getElementById('btnStart').style.display = 'block';
+        document.getElementById('btnStop').style.display = 'none';
+        document.getElementById('status').innerText = "Zastaveno.";
+      }
+
+      function sendData() {
+        if (buffer.length === 0) return;
+        const data = buffer.join("");
+        const count = buffer.length;
+        buffer = [];
+        document.getElementById('bufSize').innerText = 0;
+        document.getElementById('status').innerText = "Odesílám " + count + " záznamů...";
+
+        // Odeslání přes no-cors (obejití bezpečnostní chyby prohlížeče)
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ csvChunk: data })
+        }).then(() => {
+          document.getElementById('status').innerText = "Odesláno (bez potvrzení).";
+          // V režimu no-cors nevidíme odpověď "OK", ale data dorazí.
+        }).catch(err => {
+          document.getElementById('status').innerText = "Chyba sítě!";
+        });
+      }
+    </script>
+  </body>
+</html>
