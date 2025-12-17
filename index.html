@@ -18,12 +18,10 @@
 
     <h2>Lodní Logger (Netlify)</h2>
 
-    <p>Version: 0.01https://github.com/LudekSafar/Ship_Inclines.git</p>
-
     <div class="box">
       <div>G-Force: <span id="gVal" class="val">0.00</span></div>
       <div style="margin-top:10px">
-        X: <span id="betaVal">0</span>° | Y: <span id="gammaVal">0</span>°
+        X: <span class="val" id="betaVal">0</span>° | Y: <span class="val" id="gammaVal">0</span>°
       </div>
     </div>
 
@@ -95,7 +93,7 @@
         
         const t = new Date();
         const time = t.toLocaleTimeString('cs-CZ') + "." + t.getMilliseconds();
-        const line = `${time};${acc.x.toFixed(3)};${acc.y.toFixed(3)};${acc.z.toFixed(3)};${acc.g.toFixed(3)};${ori.beta.toFixed(1)};${ori.gamma.toFixed(1)}\n`;
+        const line = `${time};${acc.x.toFixed(3)};${acc.y.toFixed(3)};${acc.z.toFixed(3)};${acc.g.toFixed(3)};${ori.beta.toFixed(3)};${ori.gamma.toFixed(3)}\n`;
         buffer.push(line);
         document.getElementById('bufSize').innerText = buffer.length;
       }
@@ -145,4 +143,5 @@
       }
     </script>
   </body>
+
 </html>
