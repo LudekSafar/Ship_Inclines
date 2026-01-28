@@ -178,7 +178,7 @@ function tryUploadData() {
     
     document.getElementById('bufSize').innerText = rawBuffer.length;
     document.getElementById('maxBufSize').innerText = maxBuffer.length;
-    document.getElementById('status').innerText = "Data OK. Další za 5 min.";
+    document.getElementById('status').innerText = "Data OK. Další za 1 min.";
   }).catch(err => {
     document.getElementById('status').innerText = "Chyba sítě!";
   });
