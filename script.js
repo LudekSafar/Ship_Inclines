@@ -2,7 +2,7 @@
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYxb3CcbPawXuq1Q6UgIGDeCio3a2cw2TO7oiVZZGi_00sMvUekb1daRwkrEKKro7K/exec"; 
 
 // KONFIGURACE
-const UPLOAD_INTERVAL_MS = 300000; // 5 minut
+const UPLOAD_INTERVAL_MS = 60000; // 1 minuta
 
 let logging = false;
 
@@ -59,8 +59,8 @@ function runSensors() {
   window.addEventListener('deviceorientation', e => {
      live.beta = e.beta || 0;
      live.gamma = e.gamma || 0;
-     document.getElementById('betaVal').innerText = live.beta.toFixed(0);
-     document.getElementById('gammaVal').innerText = live.gamma.toFixed(0);
+     document.getElementById('betaVal').innerText = live.beta.toFixed(2);
+     document.getElementById('gammaVal').innerText = live.gamma.toFixed(2);
   });
 }
 
