@@ -1,70 +1,53 @@
 // !!! ZDE VLOŽTE URL Z GOOGLE SCRIPTU !!!
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwI-H0V8vGSEJKMPXaDNvgpx5XyXvL-Ik-t2y3TatSJNb5eHrUnNoqA83-KN5jTHqft/exec"; 
 
-// KONFIGURACE
 const UPLOAD_INTERVAL_MS = 60000; // 1 minuta
 
 let logging = false;
-
-// Buffery dat
-let rawBuffer = []; // Data každých 100ms
-let maxBuffer = []; // Data každou minutu (maxima)
+let rawBuffer = []; 
+let maxBuffer = []; 
 
 let measureInterval = null;
 let uploadInterval = null;
 let wakeLock = null;
 
-// Proměnné pro MAX logiku
 let sessionMaxFilename = "";
-let minuteTicks = 0; // Počítadlo pro 1 minutu
-let currentMinuteMax = { ax: 0, ay: 0, az: 0, g: 0, beta: 0, gamma: 0 };
+let minuteTicks = 0; 
 let live = { ax:0, ay:0, az:0, g:0, beta:0, gamma:0 };
 
-// Spustit kontrolu verze ihned po načtení
+// Objekt pro sledování extrémů v aktuální minutě
+let minuteStats = {
+    maxG: 0,
+    minBeta: 1000, maxBeta: -1000,
+    minGamma: 1000, maxGamma: -1000
+};
+
+// --- INIT & UTILS ---
 checkBackendVersion();
 
 function checkBackendVersion() {
-  const statusEl = document.getElementById('backend-version');
+  const statusEl = document.getElementById('backend-version'); // Pokud v HTML tento element nemáte, přidejte ho, nebo tento řádek smažte
+  if(statusEl) statusEl.innerHTML = "Ověřuji verzi...";
   
-  if (SCRIPT_URL === "MOJE_URL" || SCRIPT_URL === "") {
-      statusEl.innerHTML = "CHYBA: Není zadána URL skriptu!";
-      statusEl.style.color = "red";
-      return;
-  }
+  if (SCRIPT_URL.indexOf("script.google.com") === -1) return;
 
-  fetch(SCRIPT_URL) // Výchozí je metoda GET
-    .then(response => response.text()) // Přečteme text odpovědi
-    .then(text => {
-       // Pokud se vrátí text začínající na "Backend", je to naše verze
-       statusEl.innerHTML = "Připojeno k: <strong style='color:#0f0'>" + text + "</strong>";
-    })
-    .catch(err => {
-       console.error(err);
-       statusEl.innerHTML = "Verze serveru: <span style='color:red'>Nelze zjistit (CORS/Offline)</span>";
-       // Poznámka: Pokud to selže na CORS, znamená to, že server běží, ale prohlížeč blokuje čtení.
-       // I tak ale odesílání dat (POST) obvykle funguje.
-    });
+  fetch(SCRIPT_URL).then(r => r.text()).then(t => {
+       if(statusEl) statusEl.innerHTML = "Backend: <strong style='color:#0f0'>" + t + "</strong>";
+  }).catch(e => console.log(e));
 }
 
-// --- 1. WAKE LOCK ---
 async function requestWakeLock() {
   if ('wakeLock' in navigator) {
-      try { wakeLock = await navigator.wakeLock.request('screen'); } 
-      catch (e) { console.error(e); }
+      try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
   }
 }
 document.addEventListener('visibilitychange', async () => {
-  if (wakeLock !== null && document.visibilityState === 'visible' && logging) {
-      await requestWakeLock();
-  }
+  if (wakeLock !== null && document.visibilityState === 'visible' && logging) await requestWakeLock();
 });
 
-// --- 2. PERMISSIONS ---
 function askPerm() {
   if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-    DeviceMotionEvent.requestPermission().then(r => {
-       if (r === 'granted') { runSensors(); uiReady(); }
-    });
+    DeviceMotionEvent.requestPermission().then(r => { if (r === 'granted') { runSensors(); uiReady(); }});
   } else { runSensors(); uiReady(); }
 }
 function uiReady() {
@@ -79,7 +62,6 @@ function runSensors() {
      let z = e.accelerationIncludingGravity.z || 0;
      live.ax = x; live.ay = y; live.az = z;
      live.g = Math.sqrt(x*x + y*y + z*z) / 9.81;
-     
      document.getElementById('gVal').innerText = live.g.toFixed(2);
   });
   window.addEventListener('deviceorientation', e => {
@@ -90,16 +72,16 @@ function runSensors() {
   });
 }
 
-// --- 3. LOGIKA MĚŘENÍ A MAXIM ---
+// --- LOGIKA MĚŘENÍ ---
 function start() {
-  if (SCRIPT_URL === "MOJE_URL") { alert("Chyba: Nevložili jste URL skriptu!"); return; }
+  if (SCRIPT_URL.length < 10) { alert("Chybí URL!"); return; }
   
   requestWakeLock();
   rawBuffer = [];
   maxBuffer = [];
   logging = true;
   minuteTicks = 0;
-  resetMinuteMax(); 
+  resetMinuteStats();
 
   const now = new Date();
   const pad = (n) => n.toString().padStart(2, '0');
@@ -108,7 +90,7 @@ function start() {
 
   document.getElementById('btnStart').style.display = 'none';
   document.getElementById('btnStop').style.display = 'block';
-  document.getElementById('status').innerText = "Měřím... (Max log: " + sessionMaxFilename + ")";
+  document.getElementById('status').innerText = "Měřím... (Log: " + sessionMaxFilename + ")";
 
   let startTime = Date.now();
 
@@ -116,22 +98,27 @@ function start() {
       if(logging) {
           let timeMs = Date.now() - startTime;
           
+          // 1. RAW DATA
           const rawLine = `${timeMs};${live.ax.toFixed(3)};${live.ay.toFixed(3)};${live.az.toFixed(3)};${live.g.toFixed(3)};${live.beta.toFixed(2)};${live.gamma.toFixed(2)}\n`;
           rawBuffer.push(rawLine);
 
-          updateMax(live);
+          // 2. AKTUALIZACE MAXIM
+          updateStats(live);
 
+          // 3. MINUTA PROŠLA?
           minuteTicks++;
-          if (minuteTicks >= 600) {
-              saveMinuteMax(timeMs);
+          if (minuteTicks >= 600) { // 600 * 100ms = 60 sekund
+              saveMinuteStats(timeMs);
               minuteTicks = 0;
-              resetMinuteMax();
+              resetMinuteStats();
           }
 
           if (rawBuffer.length % 10 === 0) {
               document.getElementById('bufSize').innerText = rawBuffer.length;
               document.getElementById('maxBufSize').innerText = maxBuffer.length;
-              document.getElementById('gMaxVal').innerText = currentMinuteMax.g.toFixed(2);
+              // Zobrazit aktuální maxima na displeji
+              document.getElementById('gMaxVal').innerText = 
+                  `B: ${minuteStats.minBeta.toFixed(0)}/${minuteStats.maxBeta.toFixed(0)}`;
           }
       }
   }, 100);
@@ -139,21 +126,34 @@ function start() {
   uploadInterval = setInterval(tryUploadData, UPLOAD_INTERVAL_MS);
 }
 
-function updateMax(vals) {
-    if (Math.abs(vals.ax) > Math.abs(currentMinuteMax.ax)) currentMinuteMax.ax = vals.ax;
-    if (Math.abs(vals.ay) > Math.abs(currentMinuteMax.ay)) currentMinuteMax.ay = vals.ay;
-    if (Math.abs(vals.az) > Math.abs(currentMinuteMax.az)) currentMinuteMax.az = vals.az;
-    if (Math.abs(vals.g) > Math.abs(currentMinuteMax.g))   currentMinuteMax.g = vals.g;
-    if (Math.abs(vals.beta) > Math.abs(currentMinuteMax.beta)) currentMinuteMax.beta = vals.beta;
-    if (Math.abs(vals.gamma) > Math.abs(currentMinuteMax.gamma)) currentMinuteMax.gamma = vals.gamma;
+function updateStats(vals) {
+    // G-Force (stále sledujeme jen absolutní pík)
+    if (vals.g > minuteStats.maxG) minuteStats.maxG = vals.g;
+
+    // Beta (Min a Max zvlášť)
+    if (vals.beta < minuteStats.minBeta) minuteStats.minBeta = vals.beta;
+    if (vals.beta > minuteStats.maxBeta) minuteStats.maxBeta = vals.beta;
+
+    // Gamma (Min a Max zvlášť)
+    if (vals.gamma < minuteStats.minGamma) minuteStats.minGamma = vals.gamma;
+    if (vals.gamma > minuteStats.maxGamma) minuteStats.maxGamma = vals.gamma;
 }
 
-function resetMinuteMax() {
-    currentMinuteMax = { ax:0, ay:0, az:0, g:0, beta:0, gamma:0 };
+function resetMinuteStats() {
+    // Nastavíme startovní hodnoty tak, aby je první měření okamžitě přepsalo
+    minuteStats = {
+        maxG: 0,
+        minBeta: 1000,  maxBeta: -1000,
+        minGamma: 1000, maxGamma: -1000
+    };
 }
 
-function saveMinuteMax(timeMs) {
-    const maxLine = `${timeMs};${currentMinuteMax.ax.toFixed(3)};${currentMinuteMax.ay.toFixed(3)};${currentMinuteMax.az.toFixed(3)};${currentMinuteMax.g.toFixed(3)};${currentMinuteMax.beta.toFixed(2)};${currentMinuteMax.gamma.toFixed(2)}\n`;
+function saveMinuteStats(timeMs) {
+    // Pokud se nic nezměřilo (třeba start), nechceme zapsat 1000/-1000
+    // Ale díky 10Hz logice se to stane jen teoreticky.
+    
+    // FORMAT: Cas; MaxG; MinBeta; MaxBeta; MinGamma; MaxGamma
+    const maxLine = `${timeMs};${minuteStats.maxG.toFixed(3)};${minuteStats.minBeta.toFixed(2)};${minuteStats.maxBeta.toFixed(2)};${minuteStats.minGamma.toFixed(2)};${minuteStats.maxGamma.toFixed(2)}\n`;
     maxBuffer.push(maxLine);
 }
 
@@ -163,18 +163,18 @@ function stop() {
   clearInterval(uploadInterval);
   if (wakeLock) wakeLock.release();
   
-  if (minuteTicks > 0) {
-      saveMinuteMax(Date.now());
+  // Uložit i rozdělanou minutu
+  if (minuteTicks > 10) { // Alespoň vteřina měření
+      saveMinuteStats(Date.now());
   }
 
-  tryUploadData(); 
+  tryUploadData();
 
   document.getElementById('btnStart').style.display = 'block';
   document.getElementById('btnStop').style.display = 'none';
   document.getElementById('status').innerText = "Zastaveno.";
 }
 
-// --- 4. BEZPEČNÝ UPLOAD ---
 function tryUploadData() {
   if (rawBuffer.length === 0 && maxBuffer.length === 0) return;
   if (!navigator.onLine) {
@@ -191,7 +191,7 @@ function tryUploadData() {
       maxFilename: sessionMaxFilename 
   };
 
-  document.getElementById('status').innerText = `Odesílám (Raw: ${rawToSend.length}, Max: ${maxToSend.length})...`;
+  document.getElementById('status').innerText = `Odesílám...`;
 
   fetch(SCRIPT_URL, {
     method: 'POST',
@@ -201,10 +201,9 @@ function tryUploadData() {
   }).then(() => {
     rawBuffer = rawBuffer.slice(rawToSend.length);
     maxBuffer = maxBuffer.slice(maxToSend.length);
-    
     document.getElementById('bufSize').innerText = rawBuffer.length;
     document.getElementById('maxBufSize').innerText = maxBuffer.length;
-    document.getElementById('status').innerText = "Data OK. Další za 1 min.";
+    document.getElementById('status').innerText = "Data OK.";
   }).catch(err => {
     document.getElementById('status').innerText = "Chyba sítě!";
   });
