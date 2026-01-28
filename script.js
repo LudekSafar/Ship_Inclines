@@ -1,5 +1,5 @@
 // !!! ZDE VLOŽTE URL Z GOOGLE SCRIPTU !!!
-const SCRIPT_URL = "MOJE_URL"; 
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYxb3CcbPawXuq1Q6UgIGDeCio3a2cw2TO7oiVZZGi_00sMvUekb1daRwkrEKKro7K/exec"; 
 
 // KONFIGURACE
 const UPLOAD_INTERVAL_MS = 300000; // 5 minut
