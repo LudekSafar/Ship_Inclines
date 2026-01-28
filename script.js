@@ -1,5 +1,5 @@
 // !!! ZDE VLOŽTE URL Z GOOGLE SCRIPTU !!!
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYxb3CcbPawXuq1Q6UgIGDeCio3a2cw2TO7oiVZZGi_00sMvUekb1daRwkrEKKro7K/exec"; 
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwI-H0V8vGSEJKMPXaDNvgpx5XyXvL-Ik-t2y3TatSJNb5eHrUnNoqA83-KN5jTHqft/exec"; 
 
 // KONFIGURACE
 const UPLOAD_INTERVAL_MS = 60000; // 1 minuta
@@ -19,6 +19,32 @@ let sessionMaxFilename = "";
 let minuteTicks = 0; // Počítadlo pro 1 minutu
 let currentMinuteMax = { ax: 0, ay: 0, az: 0, g: 0, beta: 0, gamma: 0 };
 let live = { ax:0, ay:0, az:0, g:0, beta:0, gamma:0 };
+
+// Spustit kontrolu verze ihned po načtení
+checkBackendVersion();
+
+function checkBackendVersion() {
+  const statusEl = document.getElementById('backend-version');
+  
+  if (SCRIPT_URL === "MOJE_URL" || SCRIPT_URL === "") {
+      statusEl.innerHTML = "CHYBA: Není zadána URL skriptu!";
+      statusEl.style.color = "red";
+      return;
+  }
+
+  fetch(SCRIPT_URL) // Výchozí je metoda GET
+    .then(response => response.text()) // Přečteme text odpovědi
+    .then(text => {
+       // Pokud se vrátí text začínající na "Backend", je to naše verze
+       statusEl.innerHTML = "Připojeno k: <strong style='color:#0f0'>" + text + "</strong>";
+    })
+    .catch(err => {
+       console.error(err);
+       statusEl.innerHTML = "Verze serveru: <span style='color:red'>Nelze zjistit (CORS/Offline)</span>";
+       // Poznámka: Pokud to selže na CORS, znamená to, že server běží, ale prohlížeč blokuje čtení.
+       // I tak ale odesílání dat (POST) obvykle funguje.
+    });
+}
 
 // --- 1. WAKE LOCK ---
 async function requestWakeLock() {
