@@ -2,58 +2,120 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lodní Logger - MAX</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Lodní Logger">
+
+    <title>Lodní Logger - APP</title>
     <style>
-      body { font-family: sans-serif; background: #111; color: #eee; text-align: center; padding: 20px; }
-      .box { border: 1px solid #444; padding: 15px; margin-bottom: 15px; border-radius: 10px; background: #222; }
-      .val { font-size: 2em; color: #0f0; font-weight: bold; font-variant-numeric: tabular-nums; }
-      .label { color: #aaa; font-size: 0.8em; text-transform: uppercase; margin-bottom: 5px; }
+      /* ZÁKAZ RELOADU A GUMOVÉHO EFEKTU */
+      html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden; /* Zabrání scrollování stránky */
+        overscroll-behavior: none; /* Zákaz "pull-to-refresh" */
+        -webkit-user-select: none; /* Zákaz označování textu */
+        user-select: none;
+        background-color: #111; /* Černé pozadí pod lištami */
+      }
+
+      body { 
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+        color: #eee; 
+        text-align: center; 
+        /* Flexbox pro vystředění obsahu, aby to vypadalo hezky */
+        display: flex;
+        flex-direction: column;
+        justify-content: center; /* Vystředit vertikálně */
+        align-items: center;     /* Vystředit horizontálně */
+        padding: 20px;
+        box-sizing: border-box;
+      }
+
+      .content-wrapper {
+        width: 100%;
+        max-width: 500px; /* Aby to na iPadu nebylo moc široké */
+      }
+
+      .box { 
+        border: 1px solid #444; 
+        padding: 15px; 
+        margin-bottom: 15px; 
+        border-radius: 12px; 
+        background: #222; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      }
       
-      button { width: 100%; padding: 20px; font-size: 1.2em; background: #444; color: white; border: none; border-radius: 5px; margin-bottom: 10px; cursor: pointer; }
+      .val { font-size: 2.2em; color: #0f0; font-weight: bold; font-variant-numeric: tabular-nums; }
+      .label { color: #aaa; font-size: 0.8em; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px; }
+      
+      button { 
+        width: 100%; 
+        padding: 22px; 
+        font-size: 1.3em; 
+        background: #444; 
+        color: white; 
+        border: none; 
+        border-radius: 12px; 
+        margin-bottom: 10px; 
+        cursor: pointer; 
+        /* Efekt stisku tlačítka */
+        active: opacity: 0.7;
+        -webkit-tap-highlight-color: transparent;
+      }
       #btnStart { background: #28a745; display: none; }
       #btnStop { background: #dc3545; display: none; }
       
-      .status { font-size: 0.8em; color: #aaa; margin-top: 5px; }
+      .status { font-size: 0.8em; color: #777; margin-top: 10px; }
+      
+      /* Ikonka načítání verze */
+      #backend-version { font-size: 0.75em; color: #555; margin-bottom: 15px; }
     </style>
   </head>
   <body>
-
-    <h2>Logger + MAX (v3.7)</h2>
-    <div id="backend-version" style="font-size: 0.8em; color: #555; margin-bottom: 10px;">
-      Verze serveru: <span style="color: orange;">Ověřuji...</span>
-    </div>
-
-    <div class="box">
-      <div class="label">G-Force (Aktuální / Minutové MAX)</div>
-      <div>
-        <span id="gVal" class="val">0.00</span> / 
-        <span id="gMaxVal" class="val" style="color:orange; font-size:1.5em">0.00</span>
-      </div>
+    
+    <div class="content-wrapper">
+      <h2 style="margin-top:0; color: #ccc;">Lodní Logger v3.8</h2>
       
-      <div style="margin-top:15px; display: grid; grid-template-columns: 1fr 1fr;">
+      <div id="backend-version">
+        Verze serveru: <span style="color: orange;">Ověřuji...</span>
+      </div>
+
+      <div class="box">
+        <div class="label">G-Force (Aktuální / Max)</div>
         <div>
-           <div class="label">Náklon X</div>
-           <span class="val" id="betaVal">0</span>°
+          <span id="gVal" class="val" style="font-size:1.8em">0.00</span> / 
+          <span id="gMaxVal" class="val" style="color:orange; font-size:1.8em">0.00</span>
         </div>
-        <div>
-           <div class="label">Náklon Y</div>
-           <span class="val" id="gammaVal">0</span>°
+        
+        <div style="margin-top:15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+             <div class="label">Náklon X</div>
+             <span class="val" id="betaVal">0</span>°
+          </div>
+          <div>
+             <div class="label">Náklon Y</div>
+             <span class="val" id="gammaVal">0</span>°
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="box">
-      <div class="label">Stav odesílání</div>
-      <div id="status" class="status">Čekám na start...</div>
-      <div style="margin-top:5px; font-size: 0.8em;">
-        Raw Buffer: <span id="bufSize">0</span> | Max Buffer: <span id="maxBufSize" style="color:orange">0</span>
+      <div class="box">
+        <div class="label">Stav</div>
+        <div id="status" class="status" style="color:#eee">Čekám na start...</div>
+        <div style="margin-top:8px; font-size: 0.8em; color: #888;">
+          Raw Buffer: <span id="bufSize">0</span> | Max Buffer: <span id="maxBufSize" style="color:orange">0</span>
+        </div>
       </div>
-    </div>
 
-    <button id="btnPerm" onclick="askPerm()">1. Povolit Senzory</button>
-    <button id="btnStart" onclick="start()">2. START MĚŘENÍ</button>
-    <button id="btnStop" onclick="stop()">UKONČIT</button>
+      <button id="btnPerm" onclick="askPerm()">1. Povolit Senzory</button>
+      <button id="btnStart" onclick="start()">2. START MĚŘENÍ</button>
+      <button id="btnStop" onclick="stop()">UKONČIT</button>
+    </div>
 
     <script src="script.js"></script>
     
